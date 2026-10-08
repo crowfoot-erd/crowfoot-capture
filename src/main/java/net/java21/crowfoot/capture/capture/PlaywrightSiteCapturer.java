@@ -92,10 +92,13 @@ public class PlaywrightSiteCapturer implements SiteCapturer {
 
     private final CaptureProperties properties;
     private final AddressGuard addressGuard;
+    /** 호스트 연결 주소 바꾸기 — 뜰 때 한 번 읽는다. 설정이 잘못됐으면 서비스가 뜨지 않는다(Section 3.1) */
+    private final HostOverrides hostOverrides;
 
     public PlaywrightSiteCapturer(CaptureProperties properties, AddressGuard addressGuard) {
         this.properties = properties;
         this.addressGuard = addressGuard;
+        this.hostOverrides = new HostOverrides(properties.hostOverrides());
     }
 
     /**
@@ -140,7 +143,7 @@ public class PlaywrightSiteCapturer implements SiteCapturer {
 
     private CheckingProxy startProxy() {
         try {
-            return new CheckingProxy(addressGuard);
+            return new CheckingProxy(addressGuard, hostOverrides);
         } catch (IOException e) {
             throw new UncheckedIOException("검사 프록시를 띄우지 못했습니다", e);
         }

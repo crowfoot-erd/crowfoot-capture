@@ -14,6 +14,7 @@ import java.net.SocketTimeoutException;
 import java.net.URI;
 import java.nio.charset.StandardCharsets;
 import java.util.Locale;
+import java.util.Optional;
 import java.util.Set;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.atomic.AtomicReference;
@@ -72,13 +73,19 @@ public class CheckingProxy implements AutoCloseable {
     }
 
     private final AddressGuard guard;
+    private final HostOverrides overrides;
     private final ServerSocket server;
     private final Set<Socket> sockets = ConcurrentHashMap.newKeySet();
     private final AtomicReference<Failure> lastFailure = new AtomicReference<>();
     private volatile boolean closed;
 
     public CheckingProxy(AddressGuard guard) throws IOException {
+        this(guard, HostOverrides.none());
+    }
+
+    public CheckingProxy(AddressGuard guard, HostOverrides overrides) throws IOException {
         this.guard = guard;
+        this.overrides = overrides;
         this.server = new ServerSocket(0, 50, InetAddress.getLoopbackAddress());
         Thread.ofVirtual().name("capture-proxy-accept").start(this::acceptLoop);
     }
@@ -200,6 +207,20 @@ public class CheckingProxy implements AutoCloseable {
         if (port <= 0 || port > 65535) {
             respond(client, 400, "Bad Request", null);
             return null;
+        }
+        // 설정한 호스트는 정해 둔 내부 주소로 잇는다 — 검사기를 거치지 않는다(Section 3.1)
+        Optional<InetAddress> override = overrides.resolve(host);
+        if (override.isPresent()) {
+            Socket upstream = new Socket();
+            try {
+                upstream.connect(new InetSocketAddress(override.get(), port), CONNECT_TIMEOUT_MILLIS);
+                track(upstream);
+                return upstream;
+            } catch (IOException e) {
+                closeQuietly(upstream);
+                fail(client, Reason.UNREACHABLE, target, 502, "Bad Gateway");
+                return null;
+            }
         }
         AddressGuard.Inspection inspection = guard.inspect(host);
         if (inspection.verdict() == AddressGuard.Verdict.BLOCKED) {

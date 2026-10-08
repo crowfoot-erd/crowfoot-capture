@@ -1,4 +1,4 @@
-# 운영 — 시크릿이 없다. 설정은 기본값(application.yml)을 쓴다. 내부망 검사는 끄지 않는다.
+# 운영 — 시크릿이 없다. 설정은 기본값(application.yml)을 쓰고 호스트 연결 주소 바꾸기만 더한다. 내부망 검사는 끄지 않는다.
 logging:
   level:
     net.java21.crowfoot.capture: INFO
@@ -6,3 +6,13 @@ logging:
 server:
   port: 8080   # 운영 — 모든 서버 8080
   shutdown: graceful   # 무중단 롤아웃 — SIGTERM 후 처리 중 요청을 마무리하고 종료 (k8s RollingUpdate)
+
+crowfoot:
+  capture:
+    # 클러스터에서 자기 공인 주소(220.67.216.13)로 되돌아 나가지 못한다 — 같은 서버에 올린 사이트는 앞단 nginx의
+    # 내부 주소로 잇는다. 설정한 호스트만 내부망 검사의 예외다 (11-capture/00-capture-service.md Section 3.1, v1.41)
+    host-overrides:
+      - host: crowfoot.java21.net
+        address: 10.116.64.13
+      - host: "*.java21.net"
+        address: 10.116.64.12

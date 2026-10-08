@@ -132,7 +132,7 @@ class CaptureServiceTest {
     }
 
     private static CaptureService service(boolean allowPrivate, SiteCapturer capturer, Duration acquireWait) {
-        return new CaptureService(new CaptureProperties(2, Duration.ofSeconds(20), allowPrivate, null),
+        return new CaptureService(new CaptureProperties(2, Duration.ofSeconds(20), allowPrivate, null, null),
                 new AddressGuard(), capturer, acquireWait);
     }
 

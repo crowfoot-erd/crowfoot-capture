@@ -205,7 +205,7 @@ class PlaywrightSiteCapturerTest {
 
     private static PlaywrightSiteCapturer capturer(boolean allowPrivate, AddressGuard guard) {
         return new PlaywrightSiteCapturer(
-                new CaptureProperties(2, Duration.ofSeconds(20), allowPrivate, TestBrowsers.channel()), guard);
+                new CaptureProperties(2, Duration.ofSeconds(20), allowPrivate, TestBrowsers.channel(), null), guard);
     }
 
     /** localhost는 공개, 그 밖(127.0.0.1 등)은 실제 판정 — 시험 서버 하나로 공개·내부 두 주소를 흉내 낸다 */

@@ -1,6 +1,7 @@
 package net.java21.crowfoot.capture.capture;
 
 import com.sun.net.httpserver.HttpServer;
+import net.java21.crowfoot.capture.config.CaptureProperties;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
@@ -15,6 +16,7 @@ import java.net.InetSocketAddress;
 import java.net.Socket;
 import java.net.URI;
 import java.nio.charset.StandardCharsets;
+import java.util.List;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
@@ -60,6 +62,18 @@ class CheckingProxyTest {
                 + "\r\nProxy-Connection: keep-alive\r\n\r\n");
         assertThat(response).startsWith("HTTP/1.1 200").contains("hello /a?b=c");
         assertThat(proxy.lastFailure()).isNull();
+    }
+
+    @Test
+    @DisplayName("연결 주소를 바꾼 호스트는 검사기를 거치지 않고 정해 둔 내부 주소로 잇는다(Section 3.1)")
+    void overriddenHostConnectsToConfiguredAddress() throws IOException {
+        try (CheckingProxy overridden = new CheckingProxy(new AddressGuard(), new HostOverrides(List.of(
+                new CaptureProperties.HostOverride("site.java21.test", "127.0.0.1"))))) {
+            String response = send(overridden, "GET http://site.java21.test:" + port + "/home HTTP/1.1\r\nHost: site.java21.test\r\n\r\n");
+            assertThat(response).startsWith("HTTP/1.1 200").contains("hello /home");
+            // 설정에 없는 내부 주소는 그대로 막는다
+            assertThat(send(overridden, "GET http://127.0.0.1:" + port + "/secret HTTP/1.1\r\n\r\n")).startsWith("HTTP/1.1 403");
+        }
     }
 
     @Test
@@ -112,7 +126,13 @@ class CheckingProxyTest {
     }
 
     private String send(String request) throws IOException {
-        try (Socket socket = connectProxy()) {
+        return send(proxy, request);
+    }
+
+    private static String send(CheckingProxy target, String request) throws IOException {
+        URI address = URI.create(target.address());
+        try (Socket socket = new Socket(address.getHost(), address.getPort())) {
+            socket.setSoTimeout(5000);
             socket.getOutputStream().write(request.getBytes(StandardCharsets.ISO_8859_1));
             return new String(socket.getInputStream().readAllBytes(), StandardCharsets.ISO_8859_1);
         }
