@@ -1,0 +1,14 @@
+# 로컬 개발 — 다른 서비스를 부르지 않는다.
+logging:
+  level:
+    net.java21.crowfoot.capture: DEBUG
+
+server:
+  port: 8086   # 로컬 개발 — 프로세스별 포트 분리(운영은 전부 8080)
+
+# 자기 컴퓨터의 사이트를 찍어 보려면 아래 값을 켠다(운영에서는 끄지 않는다 — 00-capture-service.md Section 3).
+# Playwright Chromium을 받을 수 없는 macOS 13 등에서는 channel: chrome 으로 설치된 Chrome을 쓴다.
+#crowfoot:
+#  capture:
+#    allow-private: true
+#    channel: chrome

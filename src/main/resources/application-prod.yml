@@ -1,0 +1,8 @@
+# 운영 — 시크릿이 없다. 설정은 기본값(application.yml)을 쓴다. 내부망 검사는 끄지 않는다.
+logging:
+  level:
+    net.java21.crowfoot.capture: INFO
+
+server:
+  port: 8080   # 운영 — 모든 서버 8080
+  shutdown: graceful   # 무중단 롤아웃 — SIGTERM 후 처리 중 요청을 마무리하고 종료 (k8s RollingUpdate)

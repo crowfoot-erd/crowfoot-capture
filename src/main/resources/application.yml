@@ -1,0 +1,22 @@
+# 공통 설정 — 프로필 무관하게 같은 값만 둔다. 프로필별 값은 application-local.yml / application-prod.yml
+spring:
+  application:
+    name: crowfoot-capture
+  # 기본 프로필 — 지정 없이 기동하면 local. 운영은 SPRING_PROFILES_ACTIVE=prod (k8s)
+  profiles:
+    default: local
+  # 이 서버는 저장소가 없고 다른 서비스를 부르지 않는다(11-capture/00-capture-service.md Section 1.2).
+  # 보관하는 시크릿도 없다 — .env-local 파일이 필요 없다.
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health
+crowfoot:
+  capture:
+    # 캡처 설정 (11-capture/00-capture-service.md Section 4)
+    max-concurrency: 2
+    timeout: 20s
+    allow-private: false
+    # 비우면 Playwright Chromium. 로컬에서 Playwright Chromium을 받을 수 없으면 chrome(설치된 Google Chrome)
+    channel: ""
