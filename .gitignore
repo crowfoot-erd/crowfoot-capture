@@ -1,0 +1,14 @@
+target/
+*.class
+
+# 시크릿 — 절대 커밋 금지 (02-auth/requirements.md Section 1.4.3)
+
+# IDE
+.idea/
+*.iml
+.vscode/
+
+# OS
+.DS_Store
+.env*
+!.env*.example
