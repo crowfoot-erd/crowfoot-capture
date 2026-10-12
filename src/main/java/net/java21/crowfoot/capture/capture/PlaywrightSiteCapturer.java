@@ -175,7 +175,7 @@ public class PlaywrightSiteCapturer implements SiteCapturer {
         Browser.NewContextOptions contextOptions = new Browser.NewContextOptions()
                 .setViewportSize(VIEWPORT_WIDTH, VIEWPORT_HEIGHT)
                 .setDeviceScaleFactor(1)
-                .setUserAgent(defaultUserAgent(browser) + USER_AGENT_SUFFIX)
+                .setUserAgent(userAgent(defaultUserAgent(browser)))
                 // 인증서 오류는 무시하지 않는다 (Section 2.2)
                 .setIgnoreHTTPSErrors(false)
                 .setAcceptDownloads(false)
@@ -331,6 +331,15 @@ public class PlaywrightSiteCapturer implements SiteCapturer {
         }
         return new PageMetadata.Raw(str(map.get("ogTitle")), str(map.get("title")), str(map.get("ogDescription")),
                 str(map.get("description")), str(map.get("ogSiteName")), str(map.get("iconHref")));
+    }
+
+    /**
+     * 캡처에 쓸 사용자 에이전트 (11-capture/00-capture-service.md Section 2.2 — v1.42). 헤드리스 표시({@code HeadlessChrome})를
+     * 일반 {@code Chrome}으로 바꾸고 끝에 CrowfootCapture를 붙인다. 헤드리스 브라우저를 알아보는 사이트가 "브라우저를
+     * 업데이트하라"는 안내 화면을 내보내 그 화면이 찍히던 것을 막는다(v1.40 운영 — naver.com). 누가 찍는지는 끝 표시로 밝힌다
+     */
+    static String userAgent(String defaultUserAgent) {
+        return defaultUserAgent.replace("HeadlessChrome/", "Chrome/") + USER_AGENT_SUFFIX;
     }
 
     /** Chromium 기본 사용자 에이전트 — 빈 페이지에서 navigator.userAgent를 읽는다. 브라우저 버전별로 한 번 */

@@ -113,8 +113,8 @@ class PlaywrightSiteCapturerTest {
         // shortcut icon이 apple-touch-icon보다 먼저다
         assertThat(result.metadata().faviconUrl()).isEqualTo("http://localhost:" + port + "/static/icon.png");
         assertJpeg800x500(result.jpeg());
-        // 사용자 에이전트 — Chromium 기본값 끝에 CrowfootCapture를 붙인다 (Section 2.2)
-        assertThat(lastUserAgent).startsWith("Mozilla/5.0").contains("Chrome/")
+        // 사용자 에이전트 — 헤드리스 표시 없이 Chrome으로, 끝에 CrowfootCapture를 붙인다 (Section 2.2, v1.42)
+        assertThat(lastUserAgent).startsWith("Mozilla/5.0").contains("Chrome/").doesNotContain("Headless")
                 .endsWith("Safari/537.36 CrowfootCapture/1.0 (+https://crowfoot.java21.net)");
         // 파란 배경이 찍혔다 — 빈 화면이 아니다
         BufferedImage image = ImageIO.read(new ByteArrayInputStream(result.jpeg()));
@@ -224,6 +224,15 @@ class PlaywrightSiteCapturerTest {
 
     private static Instant deadline() {
         return Instant.now().plusSeconds(20);
+    }
+
+    @Test
+    @DisplayName("사용자 에이전트는 HeadlessChrome을 Chrome으로 바꾸고 CrowfootCapture를 붙인다(v1.42)")
+    void userAgentHidesHeadless() {
+        assertThat(PlaywrightSiteCapturer.userAgent(
+                "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) HeadlessChrome/153.0.0.0 Safari/537.36"))
+                .isEqualTo("Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/153.0.0.0 Safari/537.36"
+                        + " CrowfootCapture/1.0 (+https://crowfoot.java21.net)");
     }
 
     private static void assertJpeg800x500(byte[] jpeg) throws IOException {
