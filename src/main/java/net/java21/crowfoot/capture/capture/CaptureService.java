@@ -118,7 +118,7 @@ public class CaptureService {
             }
         } catch (InterruptedException e) {
             Thread.currentThread().interrupt();
-            throw new BusinessException(ErrorCode.CAPTURE_BUSY);
+            throw new BusinessException(ErrorCode.CAPTURE_BUSY, e);
         }
     }
 
@@ -130,17 +130,18 @@ public class CaptureService {
             future.cancel(true);
             log.warn("capture thread did not finish within timeout + grace — interrupted");
             throw new BusinessException(ErrorCode.CAPTURE_FAILED,
-                    "제한 시간(" + properties.timeout().toSeconds() + "초) 안에 끝나지 않았습니다");
+                    "제한 시간(" + properties.timeout().toSeconds() + "초) 안에 끝나지 않았습니다", e);
         } catch (ExecutionException e) {
             Throwable cause = e.getCause();
+            // 캡처 스레드의 예외를 그대로 꺼내 던진다 — ExecutionException은 Future 포장일 뿐이다
             if (cause instanceof RuntimeException re) {
-                throw re;
+                throw re; // NOPMD - PreserveStackTrace: 원인 예외 자체를 다시 던진다(스택 보존)
             }
-            throw new IllegalStateException(cause);
+            throw new IllegalStateException(cause); // NOPMD - PreserveStackTrace: 원인 예외를 cause로 넘긴다
         } catch (InterruptedException e) {
             future.cancel(true);
             Thread.currentThread().interrupt();
-            throw new BusinessException(ErrorCode.CAPTURE_FAILED, "캡처가 중단되었습니다");
+            throw new BusinessException(ErrorCode.CAPTURE_FAILED, "캡처가 중단되었습니다", e);
         }
     }
 

@@ -18,6 +18,10 @@ public class BusinessException extends RuntimeException {
         this(errorCode, errorCode.getDefaultMessage(), false, null);
     }
 
+    public BusinessException(ErrorCode errorCode, Throwable cause) {
+        this(errorCode, errorCode.getDefaultMessage(), false, cause);
+    }
+
     public BusinessException(ErrorCode errorCode, String message) {
         this(errorCode, message, true, null);
     }

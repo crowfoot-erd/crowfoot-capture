@@ -37,7 +37,7 @@ public final class UrlValidator {
         try {
             uri = new URI(trimmed);
         } catch (URISyntaxException e) {
-            throw invalid("주소 형식이 올바르지 않습니다");
+            throw invalid("주소 형식이 올바르지 않습니다", e);
         }
         String scheme = uri.getScheme() == null ? null : uri.getScheme().toLowerCase(Locale.ROOT);
         if (!"http".equals(scheme) && !"https".equals(scheme)) {
@@ -73,11 +73,15 @@ public final class UrlValidator {
             String rest = uri.toString().substring(uri.getScheme().length() + 3 + authority.length());
             return new URI(uri.getScheme() + "://" + ascii + port + rest);
         } catch (IllegalArgumentException | URISyntaxException e) {
-            throw invalid("주소의 호스트가 올바르지 않습니다");
+            throw invalid("주소의 호스트가 올바르지 않습니다", e);
         }
     }
 
     private static BusinessException invalid(String message) {
         return new BusinessException(ErrorCode.INVALID_URL, message);
+    }
+
+    private static BusinessException invalid(String message, Throwable cause) {
+        return new BusinessException(ErrorCode.INVALID_URL, message, cause);
     }
 }

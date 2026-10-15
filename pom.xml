@@ -29,6 +29,12 @@
         <project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
         <!-- 헤드리스 Chromium 구동 (11-capture/00-capture-service.md Section 1.3) -->
         <playwright.version>1.63.0</playwright.version>
+        <!-- 정적 분석 (00-environment/static-analysis.md) — mvn clean compile spotbugs:check pmd:check pmd:cpd-check -->
+        <spotbugs-plugin.version>4.10.4.1</spotbugs-plugin.version>
+        <findsecbugs.version>1.14.0</findsecbugs.version>
+        <pmd-plugin.version>3.28.0</pmd-plugin.version>
+        <pmd.version>7.28.0</pmd.version>
+        <quality.failOnViolation>true</quality.failOnViolation>
     </properties>
 
     <dependencies>
@@ -56,6 +62,13 @@
             <groupId>org.projectlombok</groupId>
             <artifactId>lombok</artifactId>
             <optional>true</optional>
+        </dependency>
+        <!-- 정적 분석 억제 표시(@SuppressFBWarnings) — 실행에는 쓰지 않는다 -->
+        <dependency>
+            <groupId>com.github.spotbugs</groupId>
+            <artifactId>spotbugs-annotations</artifactId>
+            <version>4.10.4</version>
+            <scope>provided</scope>
         </dependency>
 
         <!-- test -->
@@ -95,6 +108,52 @@
                         <java.awt.headless>true</java.awt.headless>
                     </systemPropertyVariables>
                 </configuration>
+            </plugin>
+            <plugin>
+                <groupId>com.github.spotbugs</groupId>
+                <artifactId>spotbugs-maven-plugin</artifactId>
+                <version>${spotbugs-plugin.version}</version>
+                <configuration>
+                    <effort>Max</effort>
+                    <threshold>Medium</threshold>
+                    <excludeFilterFile>config/quality/spotbugs-exclude.xml</excludeFilterFile>
+                    <failOnError>${quality.failOnViolation}</failOnError>
+                    <plugins>
+                        <plugin>
+                            <groupId>com.h3xstream.findsecbugs</groupId>
+                            <artifactId>findsecbugs-plugin</artifactId>
+                            <version>${findsecbugs.version}</version>
+                        </plugin>
+                    </plugins>
+                </configuration>
+            </plugin>
+            <plugin>
+                <groupId>org.apache.maven.plugins</groupId>
+                <artifactId>maven-pmd-plugin</artifactId>
+                <version>${pmd-plugin.version}</version>
+                <configuration>
+                    <rulesets>
+                        <ruleset>config/quality/pmd-ruleset.xml</ruleset>
+                    </rulesets>
+                    <targetJdk>${java.version}</targetJdk>
+                    <printFailingErrors>true</printFailingErrors>
+                    <failOnViolation>${quality.failOnViolation}</failOnViolation>
+                    <excludeRoots>
+                        <excludeRoot>target/generated-sources</excludeRoot>
+                    </excludeRoots>
+                </configuration>
+                <dependencies>
+                    <dependency>
+                        <groupId>net.sourceforge.pmd</groupId>
+                        <artifactId>pmd-java</artifactId>
+                        <version>${pmd.version}</version>
+                    </dependency>
+                    <dependency>
+                        <groupId>net.sourceforge.pmd</groupId>
+                        <artifactId>pmd-core</artifactId>
+                        <version>${pmd.version}</version>
+                    </dependency>
+                </dependencies>
             </plugin>
         </plugins>
     </build>

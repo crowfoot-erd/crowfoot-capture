@@ -106,6 +106,7 @@ public class AddressGuard {
     }
 
     /** IPv6 안의 IPv4 — IPv4 대응(::ffff:0:0/96), IPv4 호환(::/96, ::와 ::1 제외), NAT64(64:ff9b::/96) */
+    @SuppressWarnings("PMD.ReturnEmptyCollectionRatherThanNull") // null = 담긴 IPv4 없음 — 호출부가 IPv6 검사로 갈라진다(SSRF 검사 의미 유지)
     private static byte[] embeddedV4(byte[] b) {
         boolean firstTenZero = true;
         for (int i = 0; i < 10; i++) {

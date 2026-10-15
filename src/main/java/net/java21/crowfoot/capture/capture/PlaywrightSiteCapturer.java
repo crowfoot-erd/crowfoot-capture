@@ -10,6 +10,7 @@ import com.microsoft.playwright.Request;
 import com.microsoft.playwright.Response;
 import com.microsoft.playwright.Route;
 import com.microsoft.playwright.TimeoutError;
+import com.microsoft.playwright.WebSocketRoute;
 import com.microsoft.playwright.options.Proxy;
 import com.microsoft.playwright.options.ScreenshotType;
 import com.microsoft.playwright.options.ServiceWorkerPolicy;
@@ -125,15 +126,12 @@ public class PlaywrightSiteCapturer implements SiteCapturer {
         long started = System.nanoTime();
         try (Playwright playwright = Playwright.create(createOptions())) {
             log.debug("playwright created in {} ms", (System.nanoTime() - started) / 1_000_000);
-            Browser browser = launch(playwright, deadline, proxy);
-            log.debug("browser launched in {} ms", (System.nanoTime() - started) / 1_000_000);
-            try {
+            try (Browser browser = launch(playwright, deadline, proxy)) {
+                log.debug("browser launched in {} ms", (System.nanoTime() - started) / 1_000_000);
                 return captureWith(browser, url, deadline, proxy);
-            } finally {
-                browser.close();
             }
         } catch (TimeoutError e) {
-            throw timedOut();
+            throw timedOut(e);
         } finally {
             if (proxy != null) {
                 proxy.close();
@@ -188,9 +186,9 @@ public class PlaywrightSiteCapturer implements SiteCapturer {
             // 리다이렉트 다음 요청은 route가 보지 못한다 — 그것은 CheckingProxy가 연결 단계에서 막는다
             context.route("**/*", route -> guard(route, mainDocumentBlocked));
             // WebSocket(ws·wss)은 허용 스킴이 아니다 — 서버에 잇지 않고 닫는다
-            context.routeWebSocket(Pattern.compile(".*"), ws -> ws.close());
+            context.routeWebSocket(Pattern.compile(".*"), WebSocketRoute::close);
 
-            Page page = context.newPage();
+            Page page = context.newPage(); // NOPMD - CloseResource: 컨텍스트에 딸린 페이지 — finally의 context.close()가 함께 닫는다
             page.setDefaultTimeout(remainingMillis(deadline));
             long navStarted = System.nanoTime();
             Response response = navigate(page, url, deadline, mainDocumentBlocked, proxy);
@@ -202,7 +200,7 @@ public class PlaywrightSiteCapturer implements SiteCapturer {
             CheckingProxy.Reason proxyReason = CheckingProxy.Reason.fromToken(
                     String.valueOf(response.headers().get(CheckingProxy.REASON_HEADER.toLowerCase(Locale.ROOT))));
             if (proxy != null && proxyReason != null) {
-                throw proxyFailure(proxyReason);
+                throw proxyFailure(proxyReason, null);
             }
             if (response.status() >= 400) {
                 throw failed("HTTP " + response.status() + " 응답입니다");
@@ -222,7 +220,7 @@ public class PlaywrightSiteCapturer implements SiteCapturer {
             PageMetadata metadata = PageMetadata.from(readMetadata(page), finalUrl);
             return new Result(finalUrl, metadata, ThumbnailEncoder.toJpeg(screenshot));
         } catch (TimeoutError e) {
-            throw timedOut();
+            throw timedOut(e);
         } catch (PlaywrightException e) {
             log.info("capture failed: {} — {}", abbreviate(url.toString()),
                     abbreviate(String.valueOf(e.getMessage()).replace('\n', ' ')));
@@ -242,12 +240,12 @@ public class PlaywrightSiteCapturer implements SiteCapturer {
             throw e;
         } catch (PlaywrightException e) {
             if (mainDocumentBlocked.get()) {
-                throw new BusinessException(ErrorCode.BLOCKED_ADDRESS, "주소(또는 리다이렉트 대상)가 내부망 주소로 풀립니다");
+                throw new BusinessException(ErrorCode.BLOCKED_ADDRESS, "주소(또는 리다이렉트 대상)가 내부망 주소로 풀립니다", e);
             }
             // 리다이렉트 대상을 프록시가 거절했다 — 브라우저는 사유 없이 ERR_TUNNEL_CONNECTION_FAILED(https)나
             // ERR_HTTP_RESPONSE_CODE_FAILURE(http)만 알린다. 첫 문서가 오기 전이라 하위 요청의 실패일 수 없다
             if (proxy != null && proxy.lastFailure() != null) {
-                throw proxyFailure(proxy.lastFailure().reason());
+                throw proxyFailure(proxy.lastFailure().reason(), e);
             }
             throw e;
         }
@@ -279,7 +277,7 @@ public class PlaywrightSiteCapturer implements SiteCapturer {
             return;
         }
         route.abort(decision);
-        if (decision.equals("blockedbyclient")) {
+        if ("blockedbyclient".equals(decision)) {
             log.info("blocked request: {} {}", request.resourceType(), abbreviate(request.url()));
             if (isMainFrameNavigation(request)) {
                 mainDocumentBlocked.set(true);
@@ -299,7 +297,7 @@ public class PlaywrightSiteCapturer implements SiteCapturer {
         if (!ALLOWED_SCHEMES.contains(scheme)) {
             return "blockedbyclient";
         }
-        if ((scheme.equals("http") || scheme.equals("https")) && !properties.allowPrivate()) {
+        if (("http".equals(scheme) || "https".equals(scheme)) && !properties.allowPrivate()) {
             AddressGuard.Verdict verdict = addressGuard.check(uri.getHost());
             if (verdict == AddressGuard.Verdict.BLOCKED) {
                 return "blockedbyclient";
@@ -357,16 +355,16 @@ public class PlaywrightSiteCapturer implements SiteCapturer {
         Matcher m = NET_ERROR.matcher(message);
         if (m.find()) {
             String code = m.group(1);
-            if (code.equals("ERR_NAME_NOT_RESOLVED")) {
+            if ("ERR_NAME_NOT_RESOLVED".equals(code)) {
                 return "주소의 이름을 풀 수 없습니다 (net::" + code + ")";
             }
-            if (code.equals("ERR_CONNECTION_REFUSED")) {
+            if ("ERR_CONNECTION_REFUSED".equals(code)) {
                 return "연결이 거부되었습니다 (net::" + code + ")";
             }
             if (code.startsWith("ERR_CERT_") || code.startsWith("ERR_SSL_")) {
                 return "인증서 오류입니다 (net::" + code + ")";
             }
-            if (code.equals("ERR_TIMED_OUT") || code.equals("ERR_CONNECTION_TIMED_OUT")) {
+            if ("ERR_TIMED_OUT".equals(code) || "ERR_CONNECTION_TIMED_OUT".equals(code)) {
                 return "연결 시간이 초과되었습니다 (net::" + code + ")";
             }
             return "페이지를 열지 못했습니다 (net::" + code + ")";
@@ -389,21 +387,26 @@ public class PlaywrightSiteCapturer implements SiteCapturer {
         return detail;
     }
 
-    private static BusinessException proxyFailure(CheckingProxy.Reason reason) {
+    /** cause는 없으면 null */
+    private static BusinessException proxyFailure(CheckingProxy.Reason reason, Throwable cause) {
         return switch (reason) {
-            case BLOCKED -> new BusinessException(ErrorCode.BLOCKED_ADDRESS, "주소(또는 리다이렉트 대상)가 내부망 주소로 풀립니다");
-            case UNRESOLVED -> failed("주소의 이름을 풀 수 없습니다");
-            case REFUSED -> failed("연결이 거부되었습니다");
-            case UNREACHABLE -> failed("서버에 연결할 수 없습니다");
+            case BLOCKED -> new BusinessException(ErrorCode.BLOCKED_ADDRESS, "주소(또는 리다이렉트 대상)가 내부망 주소로 풀립니다", cause);
+            case UNRESOLVED -> failed("주소의 이름을 풀 수 없습니다", cause);
+            case REFUSED -> failed("연결이 거부되었습니다", cause);
+            case UNREACHABLE -> failed("서버에 연결할 수 없습니다", cause);
         };
     }
 
-    private BusinessException timedOut() {
-        return failed("제한 시간(" + properties.timeout().toSeconds() + "초) 안에 끝나지 않았습니다");
+    private BusinessException timedOut(Throwable cause) {
+        return failed("제한 시간(" + properties.timeout().toSeconds() + "초) 안에 끝나지 않았습니다", cause);
     }
 
     private static BusinessException failed(String message) {
         return new BusinessException(ErrorCode.CAPTURE_FAILED, message);
+    }
+
+    private static BusinessException failed(String message, Throwable cause) {
+        return new BusinessException(ErrorCode.CAPTURE_FAILED, message, cause);
     }
 
     static long remainingMillis(Instant deadline) {

@@ -62,7 +62,7 @@ public record PageMetadata(String title, String description, String siteName, St
             try {
                 URI icon = new URI(iconHref.strip());
                 String scheme = icon.getScheme() == null ? "" : icon.getScheme().toLowerCase(Locale.ROOT);
-                if ((scheme.equals("http") || scheme.equals("https")) && icon.getHost() != null
+                if (("http".equals(scheme) || "https".equals(scheme)) && icon.getHost() != null
                         && iconHref.length() <= UrlValidator.MAX_LENGTH) {
                     return icon.toString();
                 }

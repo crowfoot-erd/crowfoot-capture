@@ -1,5 +1,6 @@
 package net.java21.crowfoot.capture.capture;
 
+import edu.umd.cs.findbugs.annotations.SuppressFBWarnings;
 import lombok.extern.slf4j.Slf4j;
 
 import java.io.ByteArrayOutputStream;
@@ -83,6 +84,8 @@ public class CheckingProxy implements AutoCloseable {
         this(guard, HostOverrides.none());
     }
 
+    @SuppressFBWarnings(value = "UNENCRYPTED_SERVER_SOCKET",
+            justification = "루프백에만 여는 로컬 HTTP 프록시다 — 같은 프로세스의 브라우저만 붙고, https는 CONNECT 터널로 TLS가 종단 간 유지된다")
     public CheckingProxy(AddressGuard guard, HostOverrides overrides) throws IOException {
         this.guard = guard;
         this.overrides = overrides;
@@ -102,7 +105,7 @@ public class CheckingProxy implements AutoCloseable {
     private void acceptLoop() {
         while (!closed) {
             try {
-                Socket client = server.accept();
+                Socket client = server.accept(); // NOPMD - CloseResource: 처리 스레드로 넘기고 track으로 close()가 닫는다
                 track(client);
                 Thread.ofVirtual().name("capture-proxy").start(() -> handle(client));
             } catch (IOException e) {
@@ -117,9 +120,9 @@ public class CheckingProxy implements AutoCloseable {
     private void handle(Socket client) {
         try {
             client.setSoTimeout(HEAD_READ_TIMEOUT_MILLIS);
-            InputStream in = client.getInputStream();
+            InputStream in = client.getInputStream(); // NOPMD - CloseResource: 소켓 스트림 — 닫으면 소켓이 닫힌다. 소켓은 pipe·respond·close()가 닫는다
             byte[] head = readHead(in);
-            if (head == null) {
+            if (head.length == 0) {
                 closeQuietly(client);
                 return;
             }
@@ -131,7 +134,7 @@ public class CheckingProxy implements AutoCloseable {
                 respond(client, 400, "Bad Request", null);
                 return;
             }
-            if (requestLine[0].equalsIgnoreCase("CONNECT")) {
+            if ("CONNECT".equalsIgnoreCase(requestLine[0])) {
                 tunnel(client, requestLine[1]);
             } else {
                 forward(client, requestLine, headText.substring(lineEnd + 2), in);
@@ -188,20 +191,22 @@ public class CheckingProxy implements AutoCloseable {
                 continue;
             }
             String name = line.substring(0, Math.max(0, line.indexOf(':'))).strip().toLowerCase(Locale.ROOT);
-            if (name.equals("proxy-connection") || name.equals("proxy-authorization")
-                    || name.equals("connection") || name.equals("keep-alive")) {
+            if ("proxy-connection".equals(name) || "proxy-authorization".equals(name)
+                    || "connection".equals(name) || "keep-alive".equals(name)) {
                 continue;
             }
             out.append(line).append("\r\n");
         }
         out.append("Connection: close\r\n\r\n");
-        OutputStream upOut = upstream.getOutputStream();
+        OutputStream upOut = upstream.getOutputStream(); // NOPMD - CloseResource: 소켓 스트림 — 이어서 pipe가 쓴다. 소켓은 pipe가 닫는다
         upOut.write(out.toString().getBytes(StandardCharsets.ISO_8859_1));
         upOut.flush();
         pipe(client, upstream, clientIn);
     }
 
     /** 검사하고 검사한 주소로 붙는다. 막거나 실패하면 응답을 쓰고 null */
+    @SuppressFBWarnings(value = "UNENCRYPTED_SOCKET",
+            justification = "프록시는 바이트를 그대로 잇는다 — https·wss는 브라우저가 이 터널 위에서 TLS를 맺고, http는 원래 평문 요청이다")
     private Socket open(Socket client, String host, int port) throws IOException {
         String target = host + ":" + port;
         if (port <= 0 || port > 65535) {
@@ -269,9 +274,10 @@ public class CheckingProxy implements AutoCloseable {
 
     /** 양방향 복사 — 한쪽이 끝나면 둘 다 닫는다 */
     private void pipe(Socket client, Socket upstream, InputStream clientIn) throws IOException {
-        InputStream upIn = upstream.getInputStream();
-        OutputStream upOut = upstream.getOutputStream();
-        OutputStream clientOut = client.getOutputStream();
+        // 소켓 스트림은 닫지 않는다 — 위 방향은 다른 스레드가 쓰고, 소켓은 copy가 끝날 때 닫는다
+        InputStream upIn = upstream.getInputStream(); // NOPMD - CloseResource: copy가 소켓째 닫는다
+        OutputStream upOut = upstream.getOutputStream(); // NOPMD - CloseResource: 위 방향 스레드로 넘긴다
+        OutputStream clientOut = client.getOutputStream(); // NOPMD - CloseResource: copy가 소켓째 닫는다
         Thread up = Thread.ofVirtual().name("capture-proxy-up").start(() -> copy(clientIn, upOut, client, upstream));
         copy(upIn, clientOut, client, upstream);
         up.interrupt();
@@ -293,14 +299,14 @@ public class CheckingProxy implements AutoCloseable {
         }
     }
 
-    /** 요청 머리(빈 줄까지)를 읽는다. 연결이 그냥 닫히면 null */
+    /** 요청 머리(빈 줄까지)를 읽는다. 연결이 그냥 닫히면 빈 배열(머리는 빈 줄로 끝나므로 비지 않는다) */
     private static byte[] readHead(InputStream in) throws IOException {
         ByteArrayOutputStream head = new ByteArrayOutputStream(1024);
         int state = 0;
         while (head.size() < HEAD_MAX) {
             int b = in.read();
             if (b == -1) {
-                return null;
+                return new byte[0];
             }
             head.write(b);
             state = switch (state) {
@@ -351,7 +357,7 @@ public class CheckingProxy implements AutoCloseable {
         } catch (IOException ignored) {
             // 닫는 중
         }
-        for (Socket socket : sockets) {
+        for (Socket socket : sockets) { // NOPMD - CloseResource: closeQuietly로 닫는다
             closeQuietly(socket);
         }
         sockets.clear();
