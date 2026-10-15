@@ -357,7 +357,7 @@ public class CheckingProxy implements AutoCloseable {
         } catch (IOException ignored) {
             // 닫는 중
         }
-        for (Socket socket : sockets) { // NOPMD - CloseResource: closeQuietly로 닫는다
+        for (Socket socket : sockets) { // NOPMD - CloseResource: 반복문 변수라 try/finally 밖이다 — 규칙이 이 closeQuietly를 알아보지 못한다
             closeQuietly(socket);
         }
         sockets.clear();
